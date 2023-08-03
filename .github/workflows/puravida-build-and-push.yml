@@ -39,9 +39,9 @@ jobs:
           # cache-dependency-path: new-lamassu-admin/package-lock.json
 
       - uses: actions/cache@v3
-          with:
-            path: new-lamassu-admin/node_modules
-            key: ${{ hashFiles('new-lamassu-admin/package-lock.json') }}
+        with:
+          path: new-lamassu-admin/node_modules
+          key: ${{ hashFiles('new-lamassu-admin/package-lock.json') }}
 
       - name: Install Deps
         if: steps.cache.outputs.cache-hit != 'true'
