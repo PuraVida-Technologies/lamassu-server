@@ -43,7 +43,8 @@ jobs:
           mkdir -p ./dist
           docker build \
             --tag "$ADMIN_FRONTEND_APP_NAME:$GITHUB_SHA" \
-            --file "Dockerfiles/admin.Dockerfile"
+            --file "Dockerfiles/admin.Dockerfile" \
+            .
         
 
 
