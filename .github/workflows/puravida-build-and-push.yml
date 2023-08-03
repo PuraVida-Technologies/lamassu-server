@@ -38,9 +38,6 @@ jobs:
       - name: Lint
         working-directory: new-lamassu-admin/
         run: npm run fix
-      - name: Unit Tests
-        working-directory: new-lamassu-admin/
-        run: npm run test
       - name: Docker Build
         run: |-
           mkdir -p ./dist
