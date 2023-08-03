@@ -13,13 +13,16 @@ env:
   PROJECT_ID: ${{ secrets.GKE_PROJECT }}
   ARTIFACT_REGISTRY_LOCATION: ${{ vars.ARTIFACT_REGISTRY_LOCATION }}
   ADMIN_FRONTEND_APP_NAME: "lamassu-admin-frontend"
+  ADMIN_BACKEND_APP_NAME: "lamassu-admin-backend"
+  ATM_SERVER_APP_NAME: "lamassu-atm-server"
   IMAGE_REPOSITORY: ${{ vars.IMAGE_REPOSITORY }}
   HELM_REPOSITORY: ${{ vars.HELM_REPOSITORY }}
   NODE_VERSION: "14.21.3"
 
 jobs:
-  build-deploy-front-end:
-    name: Build and Deploy Front-End
+  
+  deploy-front-end:
+    name: Deploy Front-End
     if: ( github.event.pull_request.merged == true || github.event_name == 'push' )
     runs-on: ubuntu-latest
     outputs:
@@ -84,7 +87,133 @@ jobs:
           DIGEST=$(gcloud container images describe "$IMAGE_REPOSITORY/$PROJECT_ID/$ADMIN_FRONTEND_APP_NAME:$GITHUB_SHA" --format="value(image_summary.digest)")
           echo "image_digest=$DIGEST" >> $GITHUB_OUTPUT
 
+  deploy-admin-server:
+    name: Deploy Admin Server
+    if: ( github.event.pull_request.merged == true || github.event_name == 'push' )
+    runs-on: ubuntu-latest
+    outputs:
+      digest: ${{ steps.image_push.outputs.image_digest }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
 
+      - uses: actions/setup-node@v3
+        id: cache
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - uses: actions/cache@v3
+        with:
+          path: |
+            node_modules
+            new-lamassu-admin/node_modules
+          key: ${{ hashFiles('**/package-lock.json') }}
+
+      - name: Install Deps
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          npm ci
+          cd new-lamassu-admin/
+          npm ci
+
+      - name: Docker Build
+        run: |-
+          mkdir -p ./dist
+          docker build \
+            --tag "$ADMIN_BACKEND_APP_NAME:$GITHUB_SHA" \
+            --file "Dockerfiles/admin-server.Dockerfile" \
+            .
+
+      - name: Authenticate w/ Google
+        uses: 'google-github-actions/auth@v1'
+        with:
+          credentials_json: '${{ secrets.DEPLOY_SA_KEY }}'
+
+      - name: Set up Cloud SDK
+        uses: 'google-github-actions/setup-gcloud@v1'
+
+      - name: Configure Docker Client
+        run: |-
+          gcloud auth configure-docker --quiet
+          gcloud auth configure-docker $ARTIFACT_REGISTRY_LOCATION-docker.pkg.dev --quiet
+
+      - name: Push Docker Image
+        id: image_push
+        run: |-
+          ## first we tag & push the git sha as well as the edge tag
+          docker tag $ADMIN_BACKEND_APP_NAME:$GITHUB_SHA "$ARTIFACT_REGISTRY_LOCATION-docker.pkg.dev/$PROJECT_ID/$IMAGE_REPOSITORY/$ADMIN_BACKEND_APP_NAME:$GITHUB_SHA"
+          docker tag $ADMIN_BACKEND_APP_NAME:$GITHUB_SHA "$ARTIFACT_REGISTRY_LOCATION-docker.pkg.dev/$PROJECT_ID/$IMAGE_REPOSITORY/$ADMIN_BACKEND_APP_NAME:edge"
+          docker push "$ARTIFACT_REGISTRY_LOCATION-docker.pkg.dev/$PROJECT_ID/$IMAGE_REPOSITORY/$ADMIN_BACKEND_APP_NAME:$GITHUB_SHA"
+          docker push "$ARTIFACT_REGISTRY_LOCATION-docker.pkg.dev/$PROJECT_ID/$IMAGE_REPOSITORY/$ADMIN_BACKEND_APP_NAME:edge"
+
+          ## second we extract the image digest for the helm upgrade later
+          DIGEST=$(gcloud container images describe "$IMAGE_REPOSITORY/$PROJECT_ID/$ADMIN_BACKEND_APP_NAME:$GITHUB_SHA" --format="value(image_summary.digest)")
+          echo "image_digest=$DIGEST" >> $GITHUB_OUTPUT
+
+  deploy-atm-server:
+    name: Deploy ATM Server
+    if: ( github.event.pull_request.merged == true || github.event_name == 'push' )
+    runs-on: ubuntu-latest
+    outputs:
+      digest: ${{ steps.image_push.outputs.image_digest }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - uses: actions/setup-node@v3
+        id: cache
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - uses: actions/cache@v3
+        with:
+          path: node_modules
+          key: ${{ hashFiles('package-lock.json') }}
+
+      - name: Install Deps
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: npm ci
+
+      - name: Docker Build
+        run: |-
+          mkdir -p ./dist
+          docker build \
+            --tag "$ATM_SERVER_APP_NAME:$GITHUB_SHA" \
+            --file "Dockerfiles/server.Dockerfile" \
+            .
+
+      - name: Authenticate w/ Google
+        uses: 'google-github-actions/auth@v1'
+        with:
+          credentials_json: '${{ secrets.DEPLOY_SA_KEY }}'
+
+      - name: Set up Cloud SDK
+        uses: 'google-github-actions/setup-gcloud@v1'
+
+      - name: Configure Docker Client
+        run: |-
+          gcloud auth configure-docker --quiet
+          gcloud auth configure-docker $ARTIFACT_REGISTRY_LOCATION-docker.pkg.dev --quiet
+
+      - name: Push Docker Image
+        id: image_push
+        run: |-
+          ## first we tag & push the git sha as well as the edge tag
+          docker tag $ATM_SERVER_APP_NAME:$GITHUB_SHA "$ARTIFACT_REGISTRY_LOCATION-docker.pkg.dev/$PROJECT_ID/$IMAGE_REPOSITORY/$ATM_SERVER_APP_NAME:$GITHUB_SHA"
+          docker tag $ATM_SERVER_APP_NAME:$GITHUB_SHA "$ARTIFACT_REGISTRY_LOCATION-docker.pkg.dev/$PROJECT_ID/$IMAGE_REPOSITORY/$ATM_SERVER_APP_NAME:edge"
+          docker push "$ARTIFACT_REGISTRY_LOCATION-docker.pkg.dev/$PROJECT_ID/$IMAGE_REPOSITORY/$ATM_SERVER_APP_NAME:$GITHUB_SHA"
+          docker push "$ARTIFACT_REGISTRY_LOCATION-docker.pkg.dev/$PROJECT_ID/$IMAGE_REPOSITORY/$ATM_SERVER_APP_NAME:edge"
+
+          ## second we extract the image digest for the helm upgrade later
+          DIGEST=$(gcloud container images describe "$IMAGE_REPOSITORY/$PROJECT_ID/$ATM_SERVER_APP_NAME:$GITHUB_SHA" --format="value(image_summary.digest)")
+          echo "image_digest=$DIGEST" >> $GITHUB_OUTPUT
+          
 #  build-push-gcr:
 #    name: Build and Push to GCP Artifact Repo
 #    if: ( github.event.pull_request.merged == true || github.event_name == 'push' )
