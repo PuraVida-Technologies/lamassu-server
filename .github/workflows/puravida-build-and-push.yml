@@ -4,10 +4,10 @@ on:
     tags-ignore:
       - '**'
     branches:
-      - puravida
+      - 'puravida-staging'
   pull_request:
     branches:
-      - puravida
+      - 'puravida-staging'
 
 env:
   PROJECT_ID: ${{ secrets.GKE_PROJECT }}
@@ -35,8 +35,6 @@ jobs:
         id: cache
         with:
           node-version: ${{ env.NODE_VERSION }}
-          # cache: 'npm'
-          # cache-dependency-path: new-lamassu-admin/package-lock.json
 
       - uses: actions/cache@v3
         with:
