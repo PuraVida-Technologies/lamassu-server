@@ -8,7 +8,7 @@ import { Button, SupportLinkButton } from 'src/components/buttons'
 import { RadioGroup } from 'src/components/inputs'
 import { H4, Info3 } from 'src/components/typography'
 import FormRenderer from 'src/pages/Services/FormRenderer'
-import schema from 'src/pages/Services/schemas'
+import _schema from 'src/pages/Services/schemas'
 import bitgo from 'src/pages/Services/schemas/singlebitgo'
 import { ReactComponent as WarningIcon } from 'src/styling/icons/warning-icon/comet.svg'
 
@@ -52,6 +52,7 @@ const isLocalHosted = it =>
   ])
 
 const ChooseWallet = ({ data: currentData, addData }) => {
+  const schema = _schema(null)
   const classes = useStyles()
   const { data } = useQuery(GET_CONFIG)
   const [saveAccounts] = useMutation(SAVE_ACCOUNTS, {
